@@ -1,0 +1,398 @@
+type variable = string;
+
+type integer_constant = int;
+
+type boolean_constant = bool;
+
+datatype arithmetic_op = Plus | Minus | Times | Div;
+
+datatype relational_op = Lt | Le | Eq | Ne | Ge | Gt;
+
+datatype boolean_op = And | Or;
+
+datatype operator = ao of arithmetic_op | 
+                    ro of relational_op | 
+                    bo of boolean_op;
+                    
+datatype expression = ie of integer_constant | 
+                      be of boolean_constant | 
+                      v of variable | 
+                      ex of expression * expression * operator;
+
+datatype instruction = Skip | 
+                       vi of variable * expression |
+                       instr of instruction list | 
+                       exi of expression * instruction * instruction | 
+                       exi2 of expression * instruction; 
+
+datatype Type = boolean_type  | integer_type ;
+
+type declaration =  variable * Type;
+
+type declaration_list =  declaration list;
+
+type program =  declaration_list * instruction;
+
+
+(*-------------------------------------------program----------------------------------------------------------*)
+
+
+(* PROGRAM isFib {
+number prev1 prev2 cur answer
+number = 233;
+IF (number Eq 0) ELSE
+{
+prev1 = 0; prev2 = 1; cur = 1;
+WHILE (cur Lt number) {
+cur = prev1 + prev2; prev1 = prev2; prev2 = cur;
+}
+IF (cur Eq number) THEN
+ELSE answer = False; }
+}
+answer = True;
+Integer; Integer; Integer; Integer; Boolean;
+THEN answer = True;*)
+(*---------------------------------------------------------------------------------------------------------*)
+
+
+(* declaring  names*)
+val a ="number";
+val b ="prev1";
+val c ="prev2";
+val d ="cur";
+val e ="answer";
+
+(*assigning the names as expression type*)
+val number=v(a);
+val prev1=v(b);
+val prev2=v(c);
+val cur=v(d);
+val answer=v(e);
+
+
+(* declarations *)
+val num_declaration=(a,integer_type);
+val prev1_declaration=(b,integer_type);
+val prev2_declaration=(c,integer_type);
+val cur_declaration=(d,integer_type);
+val ans_declaration=(e,boolean_type);
+
+(*declaration list*)
+val dl = [num_declaration,prev1_declaration,prev2_declaration,cur_declaration,ans_declaration];
+
+val baddl = [num_declaration,prev1_declaration,prev2_declaration,num_declaration,ans_declaration];
+
+(* assigning constants as expressions*)
+val n1= ie(233);
+val n2= ie(0);
+val n3= ie(1);
+val b1= be(true);
+val b2= be(false);
+
+(* number=233 *)
+val e1= vi(a,n1);
+
+(*answer= true/false*)
+val e2 = vi(e,b1);
+val e3 = vi(e,b2);
+
+(* number eq 0 *)
+val exp1 = ex(number,n2,ro(Eq));
+
+(*while condition*)
+val exp2 = ex(cur,number,ro(Lt));
+
+(* cur eq number*)
+val exp6 = ex(cur,number,ro(Eq));
+
+(*cur=prev1+prev2// prev1=prev2 // prev2=cur*)
+val exp3 = vi(d,ex(prev1,prev2,ao(Plus)));
+val exp4 = vi(b,prev2);
+val exp5 = vi(c,cur);
+(* while body*)
+val body= instr[exp3,exp4,exp5];
+
+(* while loop*)
+val loop1 = exi2(exp2,body);
+
+
+(* second if *)
+val cond2= exi(exp6,e2,e3);
+
+(* list 1 of else 1*)
+ val l1 = instr[vi(b,n2),vi(c,n3),vi(d,n3),loop1,cond2];
+
+(*if condition*)
+val cond1= exi(exp1,e2,l1);
+
+val start = instr[e1,cond1];
+val prg_start = (dl,start);
+
+val badprg_start = (baddl,start);
+
+(*--------------------------------------------------------------------------------------------------------*)
+(*step 2*)
+(*step 2.1 *)
+datatype InternalTypeRep = intInternal|boolInternal|NoDeclaration;
+
+(*step 2.2 *)
+type TypeMap = variable->InternalTypeRep;
+
+(*step 2.3 *)
+val TypeMapZero = (fn(a:variable)=>NoDeclaration);
+
+(*Testing*)
+val a1= TypeMapZero(a);
+val a2= TypeMapZero(b);
+val a3= TypeMapZero(c);
+val a4= TypeMapZero(d);
+val a5= TypeMapZero(e);
+
+
+(*step 2.4 *)
+fun TypeMapIncrease(a:TypeMap)(b:variable,integer_type)(c:variable)= if (c=b) then intInternal else a(c)
+ |TypeMapIncrease(a:TypeMap)(b:variable,boolean_type)(c:variable)= if (c=b) then boolInternal else a(c);
+
+
+ (*testing*)
+val mapping1 = TypeMapIncrease(TypeMapZero)(num_declaration);
+mapping1(a);
+mapping1(b);
+mapping1(c);
+mapping1(d);
+mapping1(e);
+
+
+val mapping2 = TypeMapIncrease(mapping1)(prev1_declaration);
+mapping2(a);
+mapping2(b);
+mapping2(c);
+mapping2(d);
+mapping2(e);
+
+val mapping3 = TypeMapIncrease(mapping2)(prev2_declaration);
+mapping3(a);
+mapping3(b);
+mapping3(c);
+mapping3(d);
+mapping3(e);
+
+val mapping4 = TypeMapIncrease(mapping3)(cur_declaration);
+mapping4(a);
+mapping4(b);
+mapping4(c);
+mapping4(d);
+mapping4(e);
+
+val mapping5 = TypeMapIncrease(mapping4)(ans_declaration);
+mapping5(a);
+mapping5(b);
+mapping5(c);
+mapping5(d);
+mapping5(e);
+(* mapping5(f);*)
+
+(* step 2.5 *)
+val rec NewTypeMap = (fn([]) => TypeMapZero 
+                    | ((listhead :: listtail): declaration_list) => TypeMapIncrease(NewTypeMap(listtail))(listhead));
+
+
+val mymapping = NewTypeMap(dl);
+(*testing*)
+val mymapping1 = mymapping(a);
+val mymapping2 = mymapping(b);
+val mymapping3 = mymapping(c);
+val mymapping4 = mymapping(d);
+val mymapping5 = mymapping(e);
+(*val mymapping5 = mymapping(f);*)
+
+
+(* step 2.6 *)
+fun NoDuplicate(a:variable,[]:declaration_list) = true 
+| NoDuplicate(a:variable, ((b:variable, c:Type) :: listtail)) = 
+(a <> b) andalso NoDuplicate(a,listtail);
+
+(*step 2.7 *)
+val rec ValidDeclist = fn [] => true |
+((a:variable, b:Type)::tail) => NoDuplicate(a, tail) andalso ValidDeclist tail;
+
+(*testing*)
+val testlist  = [
+    (a, integer_type),
+    (b, integer_type),
+    (c, integer_type),
+    (d, integer_type),
+    (e, boolean_type)
+    ];
+ValidDeclist testlist;
+(*badcase*)
+val badtestlist  = [
+    (a, integer_type),
+    (b, integer_type),
+    (c, integer_type),
+    (a, integer_type),
+    (e, boolean_type)
+    ];
+ValidDeclist badtestlist;
+
+
+(* step 2.8 *)
+fun ExprType (ie(a)) = (fn (b:TypeMap) => intInternal) |
+    ExprType(be(a)) = (fn (b:TypeMap) => boolInternal) |
+    ExprType(v(a)) = (fn(b:TypeMap) => b(a)) |
+    ExprType(ex(e1, e2, ao(aop))) = (fn(b:TypeMap) => intInternal) |
+    ExprType(ex(e1, e2, bo(bop))) = (fn(b:TypeMap) => boolInternal) |
+    ExprType(ex(e1, e2, ro(rop))) = (fn(b:TypeMap) => boolInternal);
+
+(* step 2.9 *)
+val rec ValidExpr = fn(ie(a)) => (fn(b:TypeMap) => true) |
+                    (be(a)) => (fn(b:TypeMap) => true) |
+                    (v(a)) => (fn(b:TypeMap) => b(a) <> NoDeclaration) |
+                    (ex(xp1, xp2, ao(aop))) =>(fn(b:TypeMap) => ExprType(xp1)(b) = intInternal andalso 
+                                                            ExprType(xp2)(b) = intInternal andalso
+                                                            ValidExpr(xp1)(b) andalso ValidExpr(xp2)(b)) |
+                    (ex(xp1, xp2, ro(rop))) =>(fn(b:TypeMap) => ExprType(xp1)(b) = intInternal andalso 
+                                                            ExprType(xp2)(b) = intInternal andalso
+                                                            ValidExpr(xp1)(b) andalso ValidExpr(xp2)(b)) |
+                    (ex(xp1, xp2, bo(bop))) =>(fn(b:TypeMap) => ExprType(xp1)(b) = boolInternal andalso 
+                                                            ExprType(xp2)(b) = boolInternal andalso
+                                                            ValidExpr(xp1)(b) andalso ValidExpr(xp2)(b));
+(* testing *)
+(* Integer Constant test *)
+ValidExpr(n1)(mapping5);
+(* Boolean Constant test *)
+ValidExpr(b1)(mapping5);
+(* variable test*)
+ValidExpr(number)(mapping5);
+(*badcase*)
+val xxx = "testvar" ;
+ValidExpr(v(xxx))(mapping5);
+(* conditional rop *)                                                            
+ValidExpr(exp1)(mapping5);
+(*bad case rop*)
+val rltest = ex(number,answer,ro(Eq));
+ValidExpr(rltest)(mapping5);
+(* aop test*)
+val cmpd1 =ex(prev1,prev2,ao(Plus));
+val cmpd2 =ex(prev1,cur,ao(Plus));
+val cmpd3 = ex(cmpd1,cmpd2,ao(Minus));
+ValidExpr(cmpd3)(mapping5);
+(*bad case aop*)
+val cmpd4 =ex(prev1,answer,ao(Plus));
+val aoptest = ex(cmpd1,cmpd4,ao(Minus));
+ValidExpr(aoptest)(mapping5);
+
+ 
+(* step 2.10 *)
+fun ValidInstruction (Skip)(a: TypeMap) = true
+     |   ValidInstruction (vi(z,e))(a: TypeMap) = (a(z) = ExprType(e)(a))
+                  andalso ValidExpr(e)(a) andalso (a(z) <> NoDeclaration) 
+     |   ValidInstruction(instr([]))(a: TypeMap) = true 
+     |   ValidInstruction(instr(listhead::listtail))(a: TypeMap) = ValidInstruction(listhead)(a) 
+     |   ValidInstruction(exi(e,i1,i2))(a:TypeMap)= ValidExpr(e)(a) andalso ValidInstruction(i1)(a)  
+                   andalso ValidInstruction(i2)(a)  andalso ExprType (e)(a)=boolInternal
+     |   ValidInstruction(exi2(e,i))(a: TypeMap) = ValidExpr (e)(a) andalso
+         ValidInstruction (i)(a) andalso ExprType (e)(a)= boolInternal;
+
+(*testing*)
+(* assignment*)
+ValidInstruction(e2)(mapping5);
+(* list*)
+ValidInstruction(l1)(mapping5);
+(* loop *)
+ValidInstruction(body)(mapping5);
+(*condition*)
+ValidInstruction(cond1)(mapping5);
+(* exi2 *)
+ValidInstruction(loop1)(mapping5);
+(*badcase*)
+val exp7 = ex(cur,answer,ro(Lt));
+val loop7 = exi2(exp7,body);
+
+ValidInstruction(loop7)(mapping5);
+
+
+(* step 2.11 *)
+
+ exception InvalidProgramSyntax;
+
+ (* step 2.12 *)
+     val validProgram = fn((declist, body):program)=> if ValidDeclist(declist) 
+      then ValidInstruction(body)(NewTypeMap(declist))
+     else raise InvalidProgramSyntax;
+ (*testing*)    
+     validProgram(prg_start);
+ (*badcase*)
+     (*validProgram(badprg_start);*)
+
+(*-------------------------------------------------------------------------------------------*)
+(* step 3.1*)
+datatype value= intv of int|boolv of bool|Unknown;
+
+(* step 3.2*)
+type ProgState = variable-> value;
+
+
+(*step 3.3 *)
+fun prgStateBegining(a:variable)= Unknown;
+
+(* step 3.4 *)
+fun changeMemoryByOne(a:variable,b:value)=(fn(c:ProgState)=>
+(fn(d:variable)=>if (d=a)then b else c(d)));
+
+(* step 3.5 *)
+exception DivideByZero;
+
+(* step 3.6 *)
+exception o1TypeNotCompatible;
+
+(* step 3.7 *)
+fun o1ExprValue(Plus,intv(i1),intv(i2))= intv(i1+i2)
+   |o1ExprValue(Minus,intv(i1),intv(i2))= intv(i1-i2)
+   |o1ExprValue(Times,intv(i1),intv(i2))= intv(i1*i2)
+   |o1ExprValue(Div,intv(i1),intv(i2))  = if i2=0 then  raise DivideByZero else intv(i1 div i2) 
+   |o1ExprValue(_,_,_) = raise o1TypeNotCompatible;
+
+(* step 3.8 *)
+exception o2TypeNotCompatible;
+
+(* step 3.9 *)
+fun o2ExprValue(Lt,intv(i1),intv(i2))= boolv(i1<i2)
+   |o2ExprValue(Le,intv(i1),intv(i2))= boolv(i1<=i2)
+   |o2ExprValue(Eq,intv(i1),intv(i2))= boolv(i1=i2)
+   |o2ExprValue(Ne,intv(i1),intv(i2))= boolv(i1<>i2)
+   |o2ExprValue(Ge,intv(i1),intv(i2))= boolv(i1>=i2)
+   |o2ExprValue(Gt,intv(i1),intv(i2))= boolv(i1>i2)
+   |o2ExprValue(_,_,_) = raise o2TypeNotCompatible;
+
+(* step 3.10 *)
+exception o3TypeNotCompatible;
+
+(* step 3.11 *)
+fun o3ExprValue(And,boolv(i1),boolv(i2))= boolv(i1 andalso i2)
+   |o3ExprValue(Or,boolv(i1),boolv(i2))= boolv(i1 orelse i2)
+   |o3ExprValue(_,_,_) = raise o3TypeNotCompatible;
+
+
+
+(* step 3.12 *)
+fun meaningExpression(ie(a))= (fn(b:ProgState)=>intv(a))|
+    meaningExpression(be(a))= (fn(b:ProgState)=>boolv(a))|
+    meaningExpression(v(a))= (fn(b:ProgState)=>b(a))|
+    meaningExpression(ex(a1,a2,ao(s)))= (fn(b:ProgState)
+                      =>o1ExprValue(s,meaningExpression(a1)(b),meaningExpression(a2)(b)))|
+    meaningExpression(ex(a1,a2,ro(s)))= (fn(b:ProgState)
+                      =>o2ExprValue(s,meaningExpression(a1)(b),meaningExpression(a2)(b)))|
+    meaningExpression(ex(a1,a2,bo(s)))= (fn(b:ProgState)
+                      =>o3ExprValue(s,meaningExpression(a1)(b),meaningExpression(a2)(b)));
+  
+  
+(* step 3.13 *)
+fun meaningInstruction(Skip)(c:ProgState)=c|
+    meaningInstruction(vi(a,b))(c:ProgState)= changeMemoryByOne(a,meaningExpression(b)(c))(c)|
+    meaningInstruction(instr[])(c:ProgState)= c|
+    meaningInstruction(instr(listhead::listtail))(c:ProgState)=(meaningInstruction(instr(listtail))o meaningInstruction(listhead))(c)|
+
+    meaningInstruction(exi(i1,i2,e))(c:ProgState)= if meaningExpression(e)(c)= boolv(true)
+                                        then meaningInstruction(i1)(c)
+                                        else meaningInstruction(i2)(c);
